@@ -1,0 +1,17 @@
+.env
+*.pem
+*.key
+*credentials*
+*secret*
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+venv_new/
+node_modules/
+.vscode/
+.idea/
+*.log
+.DS_Store
+Thumbs.db
+*.exe

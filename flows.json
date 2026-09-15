@@ -1,0 +1,578 @@
+[
+    {
+        "id": "07dbd498f4890c77",
+        "type": "tab",
+        "label": "Flow 1",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "3813d5c870289899",
+        "type": "mqtt in",
+        "z": "07dbd498f4890c77",
+        "name": "",
+        "topic": "health/patient1/sensors",
+        "qos": "0",
+        "datatype": "auto-detect",
+        "broker": "81e21324a75ede22",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 400,
+        "y": 240,
+        "wires": [
+            [
+                "ac23f27702ce0d32"
+            ]
+        ]
+    },
+    {
+        "id": "ac23f27702ce0d32",
+        "type": "json",
+        "z": "07dbd498f4890c77",
+        "name": "",
+        "property": "payload",
+        "action": "obj",
+        "pretty": false,
+        "x": 690,
+        "y": 220,
+        "wires": [
+            [
+                "c3dfcc8ace86afa2"
+            ]
+        ]
+    },
+    {
+        "id": "c3dfcc8ace86afa2",
+        "type": "function",
+        "z": "07dbd498f4890c77",
+        "name": "function 1",
+        "func": "// ============================================\n// FUNCTION NODE - Smart TeleHealth (Version FINALE corrigée)\n// ============================================\n\nlet bpm = msg.payload.bpm;\nlet spo2 = msg.payload.spo2;\nlet temperature = msg.payload.temperature || msg.payload.temp;\nlet chute = msg.payload.chute || false;\nlet scenario = msg.payload.scenario || 0;\n\n// Valeurs par défaut\nif (bpm === undefined || bpm === null) bpm = 75;\nif (spo2 === undefined || spo2 === null) spo2 = 98;\nif (temperature === undefined || temperature === null) temperature = 37.0;\n\n// Initialisation\nlet niveauAlerte = \"stable\";\nlet titreAlerte = \"PATIENT STABLE\";\nlet messageAlerte = \"\";\nlet actionRecommandee = \"\";\n\n// ========== RÈGLES D'ALERTE (ordre prioritaire) ==========\n\n// 1. CHUTE - Priorité maximale\nif (chute === true) {\n    niveauAlerte = \"urgence\";\n    titreAlerte = \"URGENCE - CHUTE DETECTEE\";\n    messageAlerte = \"BPM: \" + bpm + \" | SpO2: \" + spo2 + \"% | Temp: \" + temperature + \"°C | Chute: OUI\";\n    actionRecommandee = \"Contacter immédiatement le SAMU\";\n}\n\n// 2. TACHYCARDIE CRITIQUE (BPM > 120)\nelse if (bpm > 120) {\n    niveauAlerte = \"urgence\";\n    titreAlerte = \"URGENCE - TACHYCARDIE\";\n    messageAlerte = \"BPM: \" + bpm + \" | SpO2: \" + spo2 + \"% | Temp: \" + temperature + \"°C | Chute: NON\";\n    actionRecommandee = \"Intervention médicale immédiate\";\n}\n\n// 3. BRADYCARDIE (BPM < 50)\nelse if (bpm < 50) {\n    niveauAlerte = \"urgence\";\n    titreAlerte = \"URGENCE - BRADYCARDIE\";\n    messageAlerte = \"BPM: \" + bpm + \" | SpO2: \" + spo2 + \"% | Temp: \" + temperature + \"°C | Chute: NON\";\n    actionRecommandee = \"Intervention médicale immédiate\";\n}\n\n// 4. HYPOXIE (SpO2 < 90%) - CORRIGÉ\nelse if (spo2 < 90) {\n    niveauAlerte = \"urgence\";\n    titreAlerte = \"URGENCE - HYPOXIE\";     // ✅ CORRECT: HYPOXIE\n    messageAlerte = \"BPM: \" + bpm + \" | SpO2: \" + spo2 + \"% | Temp: \" + temperature + \"°C | Chute: NON\";\n    actionRecommandee = \"Oxygène + contacter les urgences\";\n}\n\n// 5. FIEVRE ELEVEE (> 38.5°C)\nelse if (temperature > 38.5) {\n    niveauAlerte = \"urgence\";\n    titreAlerte = \"URGENCE - FIEVRE ELEVEE\";\n    messageAlerte = \"BPM: \" + bpm + \" | SpO2: \" + spo2 + \"% | Temp: \" + temperature + \"°C | Chute: NON\";\n    actionRecommandee = \"Contacter le médecin\";\n}\n\n// 6. HYPOTHERMIE (< 36.0°C)\nelse if (temperature < 36.0) {\n    niveauAlerte = \"urgence\";\n    titreAlerte = \"URGENCE - HYPOTHERMIE\";\n    messageAlerte = \"BPM: \" + bpm + \" | SpO2: \" + spo2 + \"% | Temp: \" + temperature + \"°C | Chute: NON\";\n    actionRecommandee = \"Couvrir le patient + médecin\";\n}\n\n// 7. BPM ÉLEVÉ (100-120) - ALERTE\nelse if (bpm > 100) {\n    niveauAlerte = \"alerte\";\n    titreAlerte = \"ALERTE - BPM ÉLEVÉ\";\n    messageAlerte = \"BPM: \" + bpm + \" | SpO2: \" + spo2 + \"% | Temp: \" + temperature + \"°C | Chute: NON\";\n    actionRecommandee = \"Surveillance renforcée, repos recommandé\";\n}\n\n// 8. SpO2 BAS (90-94%) - ALERTE\nelse if (spo2 < 94) {\n    niveauAlerte = \"alerte\";\n    titreAlerte = \"ALERTE - SpO2 BAS\";\n    messageAlerte = \"BPM: \" + bpm + \" | SpO2: \" + spo2 + \"% | Temp: \" + temperature + \"°C | Chute: NON\";\n    actionRecommandee = \"Surveillance renforcée\";\n}\n\n// 9. TEMPÉRATURE ANORMALE (> 37.8 ou < 36.2)\nelse if (temperature > 37.8 || temperature < 36.2) {\n    niveauAlerte = \"alerte\";\n    titreAlerte = \"ALERTE - TEMPÉRATURE ANORMALE\";\n    messageAlerte = \"BPM: \" + bpm + \" | SpO2: \" + spo2 + \"% | Temp: \" + temperature + \"°C | Chute: NON\";\n    actionRecommandee = \"Surveillance et contrôle régulier\";\n}\n\n// 10. STABLE\nelse {\n    niveauAlerte = \"stable\";\n    titreAlerte = \"PATIENT STABLE\";\n    messageAlerte = \"BPM: \" + bpm + \" | SpO2: \" + spo2 + \"% | Temp: \" + temperature + \"°C | Chute: NON\";\n    actionRecommandee = \"Surveillance continue\";\n}\n\n// ========== CONSTRUCTION DU MESSAGE DE SORTIE ==========\n\n// Format pour msg.payload (ce que le nœud Debug affichera)\nmsg.payload = messageAlerte + \" | \" + actionRecommandee;\n\n// Ajouter le titre séparément si besoin\nmsg.topic = \"health/patient1/sensors\";\nmsg.alerte = {\n    niveau: niveauAlerte,\n    titre: titreAlerte,\n    message: messageAlerte,\n    action: actionRecommandee,\n    bpm: bpm,\n    spo2: spo2,\n    temperature: temperature,\n    chute: chute,\n    scenario: scenario\n};\n\n// Pour l'affichage dans le debug (optionnel - vous pouvez supprimer node.warn)\nnode.warn(titreAlerte + \"+\" + messageAlerte + \"+\" + actionRecommandee);\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 860,
+        "y": 220,
+        "wires": [
+            [
+                "e3551351acd43a1f"
+            ]
+        ]
+    },
+    {
+        "id": "e3551351acd43a1f",
+        "type": "switch",
+        "z": "07dbd498f4890c77",
+        "name": "",
+        "property": "payload.alerte.niveau",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "stable",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "alerte",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "urgence",
+                "vt": "str"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 3,
+        "x": 1030,
+        "y": 220,
+        "wires": [
+            [
+                "79e8f7d7667e09a2"
+            ],
+            [
+                "37eb49805b0c0baa"
+            ],
+            [
+                "9932f7ecf1a1e2aa"
+            ]
+        ]
+    },
+    {
+        "id": "79e8f7d7667e09a2",
+        "type": "change",
+        "z": "07dbd498f4890c77",
+        "name": "",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload",
+                "pt": "msg",
+                "to": "payload.alerte.message",
+                "tot": "msg"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 1120,
+        "y": 400,
+        "wires": [
+            [
+                "49a8c0cfd247e34e"
+            ]
+        ]
+    },
+    {
+        "id": "37eb49805b0c0baa",
+        "type": "change",
+        "z": "07dbd498f4890c77",
+        "name": "",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload",
+                "pt": "msg",
+                "to": "payload.alerte.message",
+                "tot": "msg"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 1100,
+        "y": 460,
+        "wires": [
+            [
+                "3e05c1bfba191704"
+            ]
+        ]
+    },
+    {
+        "id": "9932f7ecf1a1e2aa",
+        "type": "change",
+        "z": "07dbd498f4890c77",
+        "name": "",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload",
+                "pt": "msg",
+                "to": "payload.alerte.message",
+                "tot": "msg"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 1080,
+        "y": 520,
+        "wires": [
+            [
+                "3af52b4067a97bdb"
+            ]
+        ]
+    },
+    {
+        "id": "49a8c0cfd247e34e",
+        "type": "debug",
+        "z": "07dbd498f4890c77",
+        "name": "debug 3",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1400,
+        "y": 360,
+        "wires": []
+    },
+    {
+        "id": "3e05c1bfba191704",
+        "type": "debug",
+        "z": "07dbd498f4890c77",
+        "name": "debug 4",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1400,
+        "y": 440,
+        "wires": []
+    },
+    {
+        "id": "3af52b4067a97bdb",
+        "type": "debug",
+        "z": "07dbd498f4890c77",
+        "name": "debug 5",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1400,
+        "y": 520,
+        "wires": []
+    },
+    {
+        "id": "mqtt-in-sensors",
+        "type": "mqtt in",
+        "z": "07dbd498f4890c77",
+        "name": "ESP32 Data",
+        "topic": "health/patient1/sensors",
+        "qos": "0",
+        "datatype": "json",
+        "broker": "81e21324a75ede22",
+        "nl": false,
+        "rap": false,
+        "inputs": 0,
+        "x": 190,
+        "y": 340,
+        "wires": [
+            [
+                "function-prepare-ia",
+                "12998173c19e5848"
+            ]
+        ]
+    },
+    {
+        "id": "function-prepare-ia",
+        "type": "function",
+        "z": "07dbd498f4890c77",
+        "name": "Format for IA",
+        "func": "// حفظ البيانات الأصلية في msg.originalData\nmsg.originalData = {\n    bpm: msg.payload.bpm,\n    spo2: msg.payload.spo2,\n    temperature: msg.payload.temp || msg.payload.temperature,\n    chute: msg.payload.chute || false\n};\n\n// البيانات للـ IA\nmsg.payload = {\n    bpm: msg.originalData.bpm,\n    spo2: msg.originalData.spo2,\n    temperature: msg.originalData.temperature,\n    chute: msg.originalData.chute\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 590,
+        "y": 300,
+        "wires": [
+            [
+                "http-request-ia"
+            ]
+        ]
+    },
+    {
+        "id": "http-request-ia",
+        "type": "http request",
+        "z": "07dbd498f4890c77",
+        "name": "Call IA API",
+        "method": "POST",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "http://127.0.0.1:5000/predict",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 750,
+        "y": 420,
+        "wires": [
+            [
+                "function-process-result"
+            ]
+        ]
+    },
+    {
+        "id": "function-process-result",
+        "type": "function",
+        "z": "07dbd498f4890c77",
+        "name": "Process IA Result",
+        "func": "let result = msg.payload.result;\n\n// استرجاع البيانات الأصلية المحفوظة\nlet orig = msg.originalData || {};\nlet bpm         = orig.bpm;\nlet spo2        = orig.spo2;\nlet temperature = orig.temperature;\nlet chute       = orig.chute || false;\n\nlet labelMap = {0: \"Stable\", 1: \"Stress\", 2: \"Critique\"};\nlet colorMap = {Stable: \"🟢\", Stress: \"🟠\", Critique: \"🔴\"};\n\nlet etat   = labelMap[result.label];\nlet couleur = colorMap[etat];\n\nlet alertMessage = \"\";\nlet action = \"\";\n\nif (result.label === 2) {\n    alertMessage = \"🚨 URGENCE MEDICALE !\";\n    action = \"Contacter immediatement le SAMU\";\n} else if (result.label === 1) {\n    alertMessage = \"⚠️ ALERTE - Surveillance renforcee\";\n    action = \"Repos recommande\";\n} else {\n    alertMessage = \"✅ Patient stable\";\n    action = \"Surveillance continue\";\n}\n\nmsg.payload = {\n    bpm: bpm,\n    spo2: spo2,\n    temperature: temperature,\n    chute: chute,\n    ia_result: {\n        etat: etat,\n        couleur: couleur,\n        label: result.label,\n        probabilites: result.probabilities\n    },\n    alerte: {\n        niveau: result.label === 2 ? \"CRITIQUE\" : (result.label === 1 ? \"STRESS\" : \"NORMAL\"),\n        message: alertMessage,\n        action: action,\n        timestamp: new Date().toISOString()\n    }\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 750,
+        "y": 540,
+        "wires": [
+            [
+                "debug-ia",
+                "0aae897ac50d8b24",
+                "68d2f29cb77c141c"
+            ]
+        ]
+    },
+    {
+        "id": "debug-ia",
+        "type": "debug",
+        "z": "07dbd498f4890c77",
+        "name": "IA Result",
+        "active": true,
+        "x": 1000,
+        "y": 640,
+        "wires": []
+    },
+    {
+        "id": "12998173c19e5848",
+        "type": "mqtt out",
+        "z": "07dbd498f4890c77",
+        "name": "ThingsBoard Cloud ",
+        "topic": "v1/devices/me/telemetry",
+        "qos": "1",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "a9314619e51762c8",
+        "x": 1070,
+        "y": 740,
+        "wires": []
+    },
+    {
+        "id": "0aae897ac50d8b24",
+        "type": "function",
+        "z": "07dbd498f4890c77",
+        "name": "Format for ThingsBoard ",
+        "func": "// Récupérer les données depuis le message entrant\nlet bpm = msg.payload.bpm;\nlet spo2 = msg.payload.spo2;\nlet temperature = msg.payload.temp || msg.payload.temperature;\nlet chute = msg.payload.chute || false;\n\n// --- Récupérer l'état IA ---\n// L'état IA peut venir de différents endroits selon votre flow\n// Si \"Format for ThingsBoard\" est connecté APRÈS \"Process IA Result\"\nlet iaResult = msg.payload.result || msg.payload.ia_result || msg.payload;\nlet labelMap = {0: \"Stable\", 1: \"Stress\", 2: \"Critique\"};\nlet etatIA = labelMap[iaResult.label] || \"Inconnu\";\n\n// --- Probabilités (optionnel) ---\nlet probaStable = iaResult.probabilities?.[\"0\"] || iaResult.probabilites?.[\"0\"] || 0;\nlet probaStress = iaResult.probabilities?.[\"1\"] || iaResult.probabilites?.[\"1\"] || 0;\nlet probaCritique = iaResult.probabilities?.[\"2\"] || iaResult.probabilites?.[\"2\"] || 0;\n\n// --- Construction du message pour ThingsBoard ---\nmsg.payload = {\n    bpm: bpm,\n    spo2: spo2,\n    temperature: temperature,\n    chute: chute ? 1 : 0,\n    etat_ia: etatIA,                                // ← Clé qui apparaîtra\n    probabilite_stable: probaStable,\n    probabilite_stress: probaStress,\n    probabilite_critique: probaCritique\n};\n\nmsg.topic = \"v1/devices/me/telemetry\";\n\n// Debug : affiche dans la console Node-RED\nnode.warn(\"Envoi à ThingsBoard: \" + JSON.stringify(msg.payload));\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 790,
+        "y": 640,
+        "wires": [
+            [
+                "12998173c19e5848"
+            ]
+        ]
+    },
+    {
+        "id": "e1f211e8827fb824",
+        "type": "telegram sender",
+        "z": "07dbd498f4890c77",
+        "name": "",
+        "bot": "9848155fa3a694bb",
+        "haserroroutput": false,
+        "outputs": 1,
+        "x": 1510,
+        "y": 600,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "68d2f29cb77c141c",
+        "type": "function",
+        "z": "07dbd498f4890c77",
+        "name": "Format Telegram",
+        "func": "let bpm         = msg.payload.bpm;\nlet spo2        = msg.payload.spo2;\nlet temperature = msg.payload.temperature;\nlet chute       = msg.payload.chute || false;\nlet iaResult    = msg.payload.ia_result || {};\nlet label       = iaResult.label !== undefined ? iaResult.label : 0;\nlet etat        = label === 2 ? \"Critique\" : (label === 1 ? \"Stress\" : \"Stable\");\n\nnode.warn(\"BPM=\" + bpm + \" etat=\" + etat + \" chute=\" + chute);\n\nif (label === 2 || label === 1 || chute === true) {\n\n    let cause = \"\";\n    if (chute)        cause = \"CHUTE DETECTEE\";\n    else if (bpm > 120)   cause = \"BPM CRITIQUE (\" + bpm + \")\";\n    else if (bpm < 50)    cause = \"BRADYCARDIE (\" + bpm + \")\";\n    else if (spo2 < 90)   cause = \"SPO2 CRITIQUE (\" + spo2 + \"%)\";\n    else if (label === 1) cause = \"STRESS DETECTE\";\n    else cause = \"ETAT CRITIQUE\";\n\n    let message = \"🚨 ALERTE MEDICALE 🚨\\n\\n\";\n    message += \"👤 Patient: Smart TeleHealth\\n\";\n    message += \"⚠️ Cause: \" + cause + \"\\n\\n\";\n    message += \"❤️ BPM: \" + bpm + \"\\n\";\n    message += \"🫁 SpO2: \" + spo2 + \"%\\n\";\n    message += \"🌡️ Temp: \" + temperature + \"C\\n\";\n    message += \"🤸 Chute: \" + (chute ? \"OUI !\" : \"NON\") + \"\\n\";\n    message += \"🤖 IA: \" + etat + \"\\n\\n\";\n    message += \"📱 Contactez les secours !\";\n\n    msg.payload = {\n        chatId: 5607038234,\n        type: \"message\",\n        content: message\n    };\n\n    node.warn(\"TELEGRAM ENVOYE: \" + cause);\n    return msg;\n}\n\nnode.warn(\"Stable - pas d'envoi\");\nreturn null;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1090,
+        "y": 580,
+        "wires": [
+            [
+                "e1f211e8827fb824"
+            ]
+        ]
+    },
+    {
+        "id": "c40f2d5e8dc6c06d",
+        "type": "mqtt in",
+        "z": "07dbd498f4890c77",
+        "name": "",
+        "topic": "health/patient1/commands",
+        "qos": "2",
+        "datatype": "json",
+        "broker": "ef1e50e531e2228b",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 290,
+        "y": 560,
+        "wires": [
+            [
+                "4ad69df2c4862555"
+            ]
+        ]
+    },
+    {
+        "id": "4ad69df2c4862555",
+        "type": "function",
+        "z": "07dbd498f4890c77",
+        "name": "function 2",
+        "func": "// Récupérer le message reçu (ex: {\"chatId\":..., \"type\":..., \"content\":\"Test inject direct\"})\nlet content = msg.payload.content || \"Message reçu\";\nlet chatId = msg.payload.chatId || \"\";\n\n// Formater pour ThingsBoard\nmsg.payload = {\n    alerte_telegram: content,\n    chat_id: chatId,\n    timestamp_alerte: Date.now()\n};\n\nmsg.topic = \"v1/devices/me/telemetry\";\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 620,
+        "y": 740,
+        "wires": [
+            [
+                "12998173c19e5848"
+            ]
+        ]
+    },
+    {
+        "id": "81e21324a75ede22",
+        "type": "mqtt-broker",
+        "name": "",
+        "broker": "broker.emqx.io",
+        "port": 1883,
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": 4,
+        "keepalive": 60,
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "a9314619e51762c8",
+        "type": "mqtt-broker",
+        "name": "",
+        "broker": "mqtt.thingsboard.cloud",
+        "port": 1883,
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": 4,
+        "keepalive": 60,
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "9848155fa3a694bb",
+        "type": "telegram bot",
+        "botname": "Telegram Alert",
+        "usernames": "",
+        "chatids": "",
+        "baseapiurl": "",
+        "testenvironment": false,
+        "updatemode": "polling",
+        "pollinterval": 300,
+        "usesocks": false,
+        "sockshost": "",
+        "socksprotocol": "socks5",
+        "socksport": 6667,
+        "socksusername": "anonymous",
+        "sockspassword": "",
+        "bothost": "",
+        "botpath": "",
+        "localbothost": "0.0.0.0",
+        "localbotport": 8443,
+        "publicbotport": 8443,
+        "privatekey": "",
+        "certificate": "",
+        "useselfsignedcertificate": false,
+        "sslterminated": false,
+        "verboselogging": false
+    },
+    {
+        "id": "ef1e50e531e2228b",
+        "type": "mqtt-broker",
+        "name": "",
+        "broker": "broker.emqx.io",
+        "port": 1883,
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": 4,
+        "keepalive": 60,
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "7f7c4fdd87213d40",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-contrib-telegrambot": "17.4.12"
+        }
+    }
+]
